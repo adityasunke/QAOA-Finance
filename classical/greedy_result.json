@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "tickers": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "AMZN",
+      "META",
+      "TSLA",
+      "NVDA"
+    ],
+    "trading_days": 42,
+    "date_range": [
+      "2026-02-03",
+      "2026-04-02"
+    ],
+    "lambda": 1.0,
+    "k": 4,
+    "annualised_mu": {
+      "AAPL": -0.321565,
+      "MSFT": -0.752614,
+      "GOOGL": -0.900948,
+      "AMZN": -0.881311,
+      "META": -1.240592,
+      "TSLA": -0.94088,
+      "NVDA": -0.271782
+    }
+  },
+  "result": {
+    "solver": "greedy",
+    "selected_assets": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "NVDA"
+    ],
+    "bitstring": [
+      1,
+      1,
+      1,
+      0,
+      0,
+      0,
+      1
+    ],
+    "objective": 3.045672,
+    "annualised_return": -2.246908,
+    "annualised_variance": 0.798764
+  }
+}
