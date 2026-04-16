@@ -2,10 +2,10 @@
 QUBO matrix construction for binary portfolio optimization.
 
 Objective:
-    minimize  xᵀΣx − λμᵀx
+    minimize  xᵀΣx - λμᵀx
 
 With cardinality constraint (select exactly k assets) enforced via penalty:
-    Penalty = A · (Σᵢ xᵢ − k)²
+    Penalty = A · (Σᵢ xᵢ - k)²
 
 Combined QUBO:
     f(x) = xᵀQx    where Q encodes both objective and constraint
