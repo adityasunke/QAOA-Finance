@@ -1,11 +1,10 @@
 """
-Fetch 2 months of daily adjusted close prices for the Magnificent 7
+Fetch 100 trading days of daily OHLCV prices for the Magnificent 7
 from Alpha Vantage and save each ticker as a CSV in data/.
 """
 
 import os
 import time
-import datetime
 import requests
 import pandas as pd
 from pathlib import Path
@@ -13,7 +12,6 @@ from dotenv import load_dotenv
 
 # ── Config ────────────────────────────────────────────────────────────────────
 MAG7 = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
-MONTHS = 2
 DATA_DIR = Path(__file__).parent
 BASE_URL = "https://www.alphavantage.co/query"
 # Alpha Vantage free tier: 25 req/day, ~5 req/min
@@ -47,11 +45,6 @@ def fetch_daily(ticker: str, api_key: str) -> pd.DataFrame:
     return df
 
 
-def filter_two_months(df: pd.DataFrame) -> pd.DataFrame:
-    cutoff = datetime.date.today() - datetime.timedelta(days=MONTHS * 31)
-    return df[df.index.date >= cutoff]
-
-
 def main():
     load_dotenv(Path(__file__).parent.parent / ".env")
     api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
@@ -60,8 +53,7 @@ def main():
 
     for i, ticker in enumerate(MAG7):
         print(f"[{i+1}/{len(MAG7)}] Fetching {ticker}...", end=" ", flush=True)
-        df = fetch_daily(ticker, api_key)
-        df = filter_two_months(df)
+        df = fetch_daily(ticker, api_key)  # compact = last 100 trading days
         out = DATA_DIR / f"{ticker}.csv"
         df.to_csv(out)
         print(f"{len(df)} trading days → {out.name}")

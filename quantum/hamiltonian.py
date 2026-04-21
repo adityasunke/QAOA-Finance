@@ -176,12 +176,18 @@ def verify_hamiltonian(
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
-    from data.generate_data import generate_assets
+    from data.generate_data import load_assets, DEFAULT_TICKERS
     from quantum.qubo import build_qubo
 
-    for n in [4, 6, 8]:
-        mu, Sigma = generate_assets(n, seed=42)
+    subsets = [
+        DEFAULT_TICKERS[:4],
+        DEFAULT_TICKERS[:6],
+        DEFAULT_TICKERS,
+    ]
+    for tickers in subsets:
+        n = len(tickers)
         k = n // 2
+        mu, Sigma = load_assets(tickers)
         Q, _offset = build_qubo(mu, Sigma, lam=1.0, k=k)
         h, J, offset = qubo_to_ising(Q)
 

@@ -1,35 +1,70 @@
 """
-Synthetic financial data generation for QAOA portfolio optimization.
+Real financial data loader for QAOA portfolio optimization.
+
+Loads daily closing prices from CSV files in data/, computes log daily returns,
+and derives annualized μ (mean return vector) and Σ (covariance matrix).
 """
 
 import numpy as np
+import pandas as pd
+from pathlib import Path
+
+DEFAULT_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
+DEFAULT_DATA_DIR = Path(__file__).parent
+TRADING_DAYS = 252  # annualization factor
 
 
-def generate_assets(n: int, seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
+def load_assets(
+    tickers: list[str] | None = None,
+    data_dir: Path | str | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Generate synthetic expected returns and covariance matrix for n assets.
+    Load stock CSVs and compute annualized μ and Σ from log daily returns.
 
     Parameters
     ----------
-    n    : number of assets
-    seed : random seed for reproducibility
+    tickers  : list of ticker symbols; defaults to the Magnificent 7
+    data_dir : directory containing <TICKER>.csv files; defaults to data/
 
     Returns
     -------
-    mu    : (n,) array of expected returns, drawn from N(0.1, 0.05)
-    Sigma : (n, n) positive-semidefinite covariance matrix, constructed as AᵀA / n
+    mu    : (n,) annualized mean log-return vector
+    Sigma : (n, n) annualized sample covariance matrix (PSD)
     """
-    rng = np.random.default_rng(seed)
+    if tickers is None:
+        tickers = DEFAULT_TICKERS
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
+    data_dir = Path(data_dir)
 
-    mu = rng.normal(loc=0.1, scale=0.05, size=n)
+    closes = {}
+    for ticker in tickers:
+        path = data_dir / f"{ticker}.csv"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{path} not found — run data/fetch_stock_data.py first."
+            )
+        df = pd.read_csv(path, index_col="date", parse_dates=True)
+        closes[ticker] = df["close"]
 
-    A = rng.standard_normal((n, n))
-    Sigma = (A.T @ A) / n  # guaranteed PSD
+    prices = pd.DataFrame(closes).sort_index()
+    log_returns = np.log(prices / prices.shift(1)).dropna()
+
+    mu = log_returns.mean().values * TRADING_DAYS
+    Sigma = log_returns.cov().values * TRADING_DAYS
 
     return mu, Sigma
 
 
 if __name__ == "__main__":
-    for n in [4, 6, 8, 10]:
-        mu, Sigma = generate_assets(n, seed=42)
-        print(f"n={n}: mu={np.round(mu, 4)}, Sigma diagonal={np.round(np.diag(Sigma), 4)}")
+    subsets = [
+        ["AAPL", "MSFT", "GOOGL", "AMZN"],
+        ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"],
+        DEFAULT_TICKERS,
+    ]
+    for tickers in subsets:
+        mu, Sigma = load_assets(tickers)
+        n = len(tickers)
+        print(f"n={n} {tickers}:")
+        print(f"  mu    = {np.round(mu, 4)}")
+        print(f"  Sigma diagonal = {np.round(np.diag(Sigma), 4)}")

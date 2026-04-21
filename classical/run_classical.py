@@ -1,6 +1,6 @@
 """
 Run brute-force, greedy, and simulated annealing portfolio optimizers
-on 2 months of real Magnificent 7 stock data and save results to classical/.
+on 100 days of real Magnificent 7 stock data and save results to classical/.
 """
 
 import sys
@@ -14,37 +14,13 @@ sys.path.insert(0, str(ROOT))
 
 from classical.brute_force import brute_force
 from classical.heuristics import greedy, simulated_annealing
+from data.generate_data import load_assets
 
 DATA_DIR = ROOT / "data"
 OUT_DIR = Path(__file__).parent
 TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
 LAM = 1.0
 K = 4   # select 4 of 7 assets
-
-
-def load_returns() -> pd.DataFrame:
-    """Load CSVs and return a DataFrame of daily log returns (dates x tickers)."""
-    closes = {}
-    for ticker in TICKERS:
-        path = DATA_DIR / f"{ticker}.csv"
-        if not path.exists():
-            raise FileNotFoundError(
-                f"{path} not found — run data/fetch_stock_data.py first."
-            )
-        df = pd.read_csv(path, index_col="date", parse_dates=True)
-        closes[ticker] = df["close"]
-
-    prices = pd.DataFrame(closes).sort_index()
-    returns = np.log(prices / prices.shift(1)).dropna()
-    return returns
-
-
-def compute_mu_sigma(returns: pd.DataFrame):
-    """Annualise mean returns and covariance from daily log returns."""
-    trading_days = 252
-    mu = returns.mean().values * trading_days
-    Sigma = returns.cov().values * trading_days
-    return mu, Sigma
 
 
 def result_to_dict(result, tickers, solver_name: str) -> dict:
@@ -60,11 +36,9 @@ def result_to_dict(result, tickers, solver_name: str) -> dict:
 
 
 def main():
-    print("Loading real stock data...")
-    returns = load_returns()
-    print(f"  {len(returns)} trading days, {len(TICKERS)} assets\n")
-
-    mu, Sigma = compute_mu_sigma(returns)
+    print("Loading real stock data (100 trading days)...")
+    mu, Sigma = load_assets(TICKERS, DATA_DIR)
+    print(f"  {len(TICKERS)} assets loaded\n")
 
     print(f"Running solvers (n={len(TICKERS)}, k={K}, λ={LAM})...\n")
 
@@ -92,11 +66,10 @@ def main():
     # ── Save results ──────────────────────────────────────────────────────────
     metadata = {
         "tickers": TICKERS,
-        "trading_days": len(returns),
-        "date_range": [str(returns.index[0].date()), str(returns.index[-1].date())],
+        "trading_days": 100,
         "lambda": LAM,
         "k": K,
-        "annualised_mu": dict(zip(TICKERS, np.round(mu, 6).tolist())),
+        "annualized_mu": dict(zip(TICKERS, np.round(mu, 6).tolist())),
     }
 
     for result_dict, fname in [

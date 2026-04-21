@@ -1,18 +1,8 @@
 """
 QAOA circuit builder for binary portfolio optimization.
 
-Constructs the standard QAOA ansatz of depth p:
-
-    |ψ(γ,β)⟩ = exp(-iβₚ HB) exp(-iγₚ HC) ··· exp(-iβ₁ HB) exp(-iγ₁ HC) |+⟩^n
-
-where:
-    HC = Σᵢ hᵢ Zᵢ + Σᵢ<ⱼ Jᵢⱼ ZᵢZⱼ   (cost Hamiltonian, from Ising mapping)
-    HB = Σᵢ Xᵢ                         (mixer Hamiltonian)
-
-Circuit conventions:
-    - exp(-iγ hᵢ Zᵢ)      → RZ(2γhᵢ) on qubit i
-    - exp(-iγ Jᵢⱼ ZᵢZⱼ)  → CNOT(i,j), RZ(2γJᵢⱼ, j), CNOT(i,j)
-    - exp(-iβ Xᵢ)          → RX(2β) on qubit i
+Constructs the standard QAOA ansatz of depth p with 2p free parameters
+[γ₁,...,γₚ, β₁,...,βₚ].
 """
 
 import numpy as np
@@ -23,113 +13,76 @@ def build_qaoa_circuit(
     h: np.ndarray,
     J: np.ndarray,
     p: int = 1,
-) -> QuantumCircuit:
+) -> tuple[QuantumCircuit, ParameterVector, ParameterVector]:
     """
     Build a parameterized QAOA circuit of depth p.
 
+    Circuit structure:
+      1. Initial state: H on all n qubits → uniform superposition |+>^n
+      2. Repeat p times:
+         - Cost layer: exp(-i γ H_C) via RZ(2γhᵢ) and RZZ(2γJᵢⱼ) gates
+         - Mixer layer: exp(-i β H_B) = RX(2β) on each qubit
+
     Parameters
     ----------
-    h : (n,) Ising local field coefficients (hᵢ for Zᵢ terms)
-    J : (n, n) upper-triangular Ising coupling matrix (Jᵢⱼ for ZᵢZⱼ terms)
-    p : QAOA depth (number of cost+mixer repetitions)
+    h : (n,) local field coefficients from the Ising Hamiltonian
+    J : (n, n) upper-triangular coupling matrix from the Ising Hamiltonian
+    p : circuit depth (number of QAOA layers)
 
     Returns
     -------
-    QuantumCircuit with 2p free parameters:
-        gamma[0..p-1]  — cost layer angles
-        beta[0..p-1]   — mixer layer angles
+    qc     : parameterized QuantumCircuit with 2p free parameters
+    gammas : ParameterVector of length p (cost layer angles)
+    betas  : ParameterVector of length p (mixer layer angles)
     """
     n = len(h)
-
-    gamma = ParameterVector("γ", p)
-    beta = ParameterVector("β", p)
+    gammas = ParameterVector('γ', p)
+    betas = ParameterVector('β', p)
 
     qc = QuantumCircuit(n)
 
-    # --- Initial state: uniform superposition ---
-    qc.h(range(n))
-
-    # --- p repetitions of cost + mixer layers ---
-    for layer in range(p):
-        g = gamma[layer]
-        b = beta[layer]
-
-        # Cost layer: exp(-i γ HC)
-        # Single-qubit Z terms: RZ(2γhᵢ)
-        for i in range(n):
-            if h[i] != 0.0:
-                qc.rz(2 * g * h[i], i)
-
-        # Two-qubit ZZ terms: CNOT, RZ(2γJᵢⱼ), CNOT
-        for i in range(n):
-            for j in range(i + 1, n):
-                if J[i, j] != 0.0:
-                    qc.cx(i, j)
-                    qc.rz(2 * g * J[i, j], j)
-                    qc.cx(i, j)
-
-        # Mixer layer: exp(-i β HB) = RX(2β) on each qubit
-        for i in range(n):
-            qc.rx(2 * b, i)
-
-    qc.measure_all()
-    return qc
-
-
-def build_qaoa_circuit_no_measure(
-    h: np.ndarray,
-    J: np.ndarray,
-    p: int = 1,
-) -> QuantumCircuit:
-    """
-    Same as build_qaoa_circuit but without the terminal measurement.
-    Used during optimization (statevector simulation needs no measurements).
-    """
-    n = len(h)
-
-    gamma = ParameterVector("γ", p)
-    beta = ParameterVector("β", p)
-
-    qc = QuantumCircuit(n)
+    # Initial state: uniform superposition
     qc.h(range(n))
 
     for layer in range(p):
-        g = gamma[layer]
-        b = beta[layer]
-
+        # --- Cost layer: exp(-i γ H_C) -----------------------------------
+        # Single-qubit Z terms: exp(-i γ hᵢ Zᵢ) = RZ(2γhᵢ) on qubit i
         for i in range(n):
             if h[i] != 0.0:
-                qc.rz(2 * g * h[i], i)
+                qc.rz(2.0 * gammas[layer] * float(h[i]), i)
 
+        # Two-qubit ZZ terms: exp(-i γ Jᵢⱼ ZᵢZⱼ) = RZZ(2γJᵢⱼ) on (i, j)
         for i in range(n):
             for j in range(i + 1, n):
                 if J[i, j] != 0.0:
-                    qc.cx(i, j)
-                    qc.rz(2 * g * J[i, j], j)
-                    qc.cx(i, j)
+                    qc.rzz(2.0 * gammas[layer] * float(J[i, j]), i, j)
 
+        # --- Mixer layer: exp(-i β Σ Xᵢ) = Π RX(2β) on each qubit ------
         for i in range(n):
-            qc.rx(2 * b, i)
+            qc.rx(2.0 * betas[layer], i)
 
-    return qc
+    return qc, gammas, betas
 
 
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
-    from data.generate_data import generate_assets
+    from data.generate_data import load_assets, DEFAULT_TICKERS
     from quantum.qubo import build_qubo
     from quantum.hamiltonian import qubo_to_ising
 
-    n, k = 4, 2
-    mu, Sigma = generate_assets(n, seed=42)
-    Q, _ = build_qubo(mu, Sigma, lam=1.0, k=k)
+    tickers = DEFAULT_TICKERS[:4]
+    mu, Sigma = load_assets(tickers)
+    Q, _ = build_qubo(mu, Sigma, lam=1.0, k=2)
     h, J, _ = qubo_to_ising(Q)
 
     for p in [1, 2, 3]:
-        qc = build_qaoa_circuit(h, J, p=p)
-        print(f"\nQAOA circuit p={p}, n={n}:")
-        print(f"  Qubits: {qc.num_qubits}")
-        print(f"  Parameters: {qc.num_parameters}  (expect {2*p})")
-        print(f"  Depth: {qc.depth()}")
-        print(f"  Gates: {dict(qc.count_ops())}")
+        qc, gammas, betas = build_qaoa_circuit(h, J, p=p)
+        print(f"p={p}: {qc.num_qubits} qubits, "
+              f"{qc.num_parameters} parameters, "
+              f"{qc.depth()} depth, "
+              f"{len(qc)} gates")
+    print()
+    print("p=1 circuit:")
+    qc1, _, _ = build_qaoa_circuit(h, J, p=1)
+    print(qc1.draw(fold=-1))

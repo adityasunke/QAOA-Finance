@@ -73,13 +73,20 @@ def brute_force(
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
-    from data.generate_data import generate_assets
+    from data.generate_data import load_assets, DEFAULT_TICKERS
 
-    for n in [4, 6, 8]:
-        mu, Sigma = generate_assets(n, seed=42)
-        result = brute_force(mu, Sigma, lam=1.0, k=n // 2)
+    subsets = [
+        DEFAULT_TICKERS[:4],
+        DEFAULT_TICKERS[:6],
+        DEFAULT_TICKERS,
+    ]
+    for tickers in subsets:
+        n = len(tickers)
+        k = n // 2
+        mu, Sigma = load_assets(tickers)
+        result = brute_force(mu, Sigma, lam=1.0, k=k)
         print(
-            f"n={n}, k={n//2}: "
+            f"n={n}, k={k}: "
             f"bits={result.bitstring.astype(int).tolist()}, "
             f"obj={result.objective:.4f}, "
             f"ret={result.ret:.4f}, "
