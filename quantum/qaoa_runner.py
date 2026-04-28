@@ -45,6 +45,7 @@ def run_qaoa(
     p: int = 1,
     shots: int = 4000,
     seed: int = 0,
+    maxiter: int = 1000,
 ) -> QAOAResult:
     """
     Run QAOA for portfolio optimization.
@@ -58,13 +59,15 @@ def run_qaoa(
 
     Parameters
     ----------
-    mu    : (n,) annualized mean log-return vector
-    Sigma : (n, n) annualized covariance matrix
-    lam   : risk-aversion parameter λ
-    k     : cardinality (number of assets to select); None = unconstrained
-    p     : QAOA circuit depth
-    shots : measurement shots for final sampling
-    seed  : random seed for parameter initialization
+    mu      : (n,) annualized mean log-return vector
+    Sigma   : (n, n) annualized covariance matrix
+    lam     : risk-aversion parameter λ
+    k       : cardinality (number of assets to select); None = unconstrained
+    p       : QAOA circuit depth
+    shots   : measurement shots for final sampling
+    seed    : random seed for parameter initialization
+    maxiter : maximum COBYLA iterations (default 1000; lower = faster but less
+              accurate — 300 is a practical benchmark setting)
 
     Returns
     -------
@@ -103,7 +106,7 @@ def run_qaoa(
     rng = np.random.default_rng(seed)
     x0 = rng.uniform(0.0, np.pi, 2 * p)
 
-    opt = minimize(cost, x0, method='COBYLA', options={'maxiter': 1000, 'rhobeg': 0.5})
+    opt = minimize(cost, x0, method='COBYLA', options={'maxiter': maxiter, 'rhobeg': 0.5})
     final_expectation = float(opt.fun)
 
     # Sample the optimized state

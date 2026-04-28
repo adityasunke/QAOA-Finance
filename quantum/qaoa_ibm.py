@@ -57,11 +57,13 @@ def optimize_on_simulator(
     ising_offset: float,
     p: int,
     seed: int = 42,
+    maxiter: int = 1000,
 ) -> tuple[np.ndarray, float, int]:
     """
     Minimize ⟨H_C⟩ + ising_offset using COBYLA on the Aer statevector simulator.
 
     Returns optimal parameters, final expectation value, and iteration count.
+    The maxiter parameter caps COBYLA iterations (lower = faster, less accurate).
     """
     H_C = build_ising_hamiltonian(h, J)
     qc, gammas, betas = build_qaoa_circuit(h, J, p=p)
@@ -83,7 +85,7 @@ def optimize_on_simulator(
 
     rng = np.random.default_rng(seed)
     x0 = rng.uniform(0.0, np.pi, 2 * p)
-    opt = minimize(cost, x0, method='COBYLA', options={'maxiter': 1000, 'rhobeg': 0.5})
+    opt = minimize(cost, x0, method='COBYLA', options={'maxiter': maxiter, 'rhobeg': 0.5})
 
     return opt.x, float(opt.fun), iter_count[0]
 

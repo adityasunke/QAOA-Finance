@@ -2,3 +2,4 @@ Plan.md
 .env
 data/*.csv
 */__pycache__
+*/__init__.py
