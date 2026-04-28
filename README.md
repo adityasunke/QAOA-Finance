@@ -55,30 +55,50 @@ Negative returns reflect the risk-minimization dominance (λ=1.0) over the 100-d
 ```
 QAOA-Finance/
 ├── data/
-│   ├── *.csv                  # 100-day price histories for 7 tickers
+│   ├── AAPL.csv … NVDA.csv    # 100-day OHLCV price histories (7 tickers)
 │   ├── fetch_stock_data.py    # Alpha Vantage API data fetcher
-│   └── generate_data.py       # Computes μ, Σ from CSVs
+│   ├── generate_data.py       # Computes annualized μ, Σ from CSVs
+│   └── unit_tests/
+│       ├── test_generate_data.py   # load_assets: shapes, PSD, annualization
+│       └── test_fetch_stock_data.py # fetch_daily: mocked HTTP, parsing
 │
 ├── classical/
 │   ├── brute_force.py         # Exact 2ⁿ enumeration (ground truth)
 │   ├── heuristics.py          # Greedy and simulated annealing
-│   └── run_classical.py       # Driver for classical solvers
+│   ├── run_classical.py       # Driver — runs all solvers, saves JSON
+│   └── unit_tests/
+│       ├── test_brute_force.py     # objective, brute_force, PortfolioResult
+│       ├── test_heuristics.py      # greedy, simulated_annealing
+│       └── test_run_classical.py   # result_to_dict
 │
 ├── quantum/
 │   ├── qubo.py                # QUBO matrix construction + verification
 │   ├── hamiltonian.py         # QUBO → Ising Hamiltonian (SparsePauliOp)
 │   ├── qaoa_circuit.py        # Parameterized QAOA circuit builder
 │   ├── qaoa_runner.py         # QAOA optimization loop (COBYLA + Aer)
-│   └── qaoa_ibm.py            # IBM Quantum hardware execution
+│   ├── qaoa_ibm.py            # IBM Quantum hardware execution
+│   └── unit_tests/
+│       ├── test_qubo.py            # build_qubo, evaluate_qubo, verify_qubo
+│       ├── test_hamiltonian.py     # qubo_to_ising, build_ising_hamiltonian, ising_energy
+│       ├── test_qaoa_circuit.py    # build_qaoa_circuit: structure, gates, binding
+│       ├── test_qaoa_runner.py     # QAOAResult, run_qaoa (Aer simulator)
+│       └── test_qaoa_ibm.py        # decode_counts, optimize_on_simulator
 │
-└── benchmarks/
-    ├── run_experiments.py     # Full sweep over (n, p) combinations
-    ├── metrics.py             # Approx ratio, success prob, return, variance
-    ├── plot_results.py        # Generates 7 publication figures
-    ├── results/
-    │   ├── results.csv
-    │   └── results.json
-    └── figures/               # PNG visualizations (fig0–fig6)
+├── benchmarks/
+│   ├── run_experiments.py     # Full sweep over (n, p) combinations
+│   ├── metrics.py             # Approx ratio, success prob, return, variance
+│   ├── plot_results.py        # Generates 7 publication figures
+│   ├── unit_tests/
+│   │   ├── test_metrics.py         # All 6 metrics functions (pure math)
+│   │   ├── test_plot_results.py    # load(), _grouped_bars(), plot_* smoke tests
+│   │   └── test_run_experiments.py # _row(), CSV_COLUMNS, K_BY_N constants
+│   ├── results/
+│   │   ├── results.csv
+│   │   └── results.json
+│   └── figures/               # PNG visualizations (fig0–fig6)
+│
+└── notebooks/
+    └── analysis.ipynb         # Post-hoc analysis and supplementary plots
 ```
 
 ---
@@ -103,6 +123,41 @@ Stock CSVs → μ, Σ → QUBO matrix Q → Ising Hamiltonian H_C
 3. Mixer layer: `RX(2β)` on each qubit
 
 Parameters: 2p (γ₁…γₚ for cost, β₁…βₚ for mixer), optimized with COBYLA.
+
+---
+
+## Testing
+
+Each module has a `unit_tests/` subfolder. Tests are discovered automatically by `pytest` from the project root.
+
+### Run all tests (305 tests across all modules)
+```bash
+python -m pytest classical/unit_tests/ data/unit_tests/ quantum/unit_tests/ benchmarks/unit_tests/ -v
+```
+
+### Run one module at a time
+```bash
+python -m pytest classical/unit_tests/ -v    # 65 tests — brute force, greedy, SA
+python -m pytest data/unit_tests/ -v         # 38 tests — data loading, API fetch
+python -m pytest quantum/unit_tests/ -v      # 120 tests — QUBO, Hamiltonian, QAOA circuit/runner
+python -m pytest benchmarks/unit_tests/ -v   # 82 tests — metrics, plotting, experiment row
+```
+
+### Run a specific file or test
+```bash
+python -m pytest quantum/unit_tests/test_hamiltonian.py -v
+python -m pytest classical/unit_tests/test_brute_force.py::TestBruteForce::test_known_optimal_k1 -v
+```
+
+### Useful flags
+| Flag | Effect |
+|---|---|
+| `-v` | Verbose — show each test name |
+| `-x` | Stop on first failure |
+| `--tb=short` | Shorter traceback on failures |
+| `-k "cardinality"` | Run only tests whose name contains "cardinality" |
+
+> **Note:** Tests in `quantum/unit_tests/` spin up the Qiskit Aer simulator and take ~5–10 s. All other tests complete in under 1 s.
 
 ---
 
@@ -137,7 +192,7 @@ python benchmarks/plot_results.py     # generates figures/
 ### IBM Quantum hardware
 ```bash
 export IBM_QUANTUM_TOKEN='<token from quantum.ibm.com>'
-python quantum/qaoa_ibm.py --backend ibm_kyoto --p 1 --shots 4000
+python quantum/qaoa_ibm.py --backend ibm_fez --p 1 --shots 4000
 ```
 
 ---
